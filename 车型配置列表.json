@@ -1,0 +1,9 @@
+{
+  "models": [
+    {
+      "id": "mechanic-2",
+      "name": "机械师二代",
+      "config": "机械师二代专用配置.json"
+    }
+  ]
+}

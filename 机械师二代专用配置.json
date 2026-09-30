@@ -1,0 +1,26 @@
+{
+  "id": "mechanic-2",
+  "name": "机械师二代专用",
+  "description": "九号速度背景导出校准参数，适配机械师二代。",
+  "canvas": {
+    "width": 2073,
+    "height": 805
+  },
+  "speedScale": {
+    "top80Percent": 8.9,
+    "step20Percent": 22.31,
+    "minimumKph": 5,
+    "maximumKph": 85,
+    "incrementKph": 5
+  },
+  "labels": {
+    "count": 10,
+    "leftPercent": 2.5,
+    "rightPercent": 97.5
+  },
+  "export": {
+    "filenamePrefix": "机械师二代",
+    "format": "jpg",
+    "quality": 0.95
+  }
+}

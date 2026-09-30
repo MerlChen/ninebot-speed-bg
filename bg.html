@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>机械师二代专用速度背景</title>
+  <style>
+    /*
+      导出画布：2073 × 805（比例约 2.575:1）。
+      此比例匹配机械师二代 APP 的速度曲线可用绘图区，避免导入后被二次裁切。
+      80 / 60 / 40 / 20 km/h 分别固定在 0% / 25% / 50% / 75% H。
+    */
+    :root {
+      --canvas-w: 2073px;
+      --canvas-h: 805px;
+      --workspace-h: 975px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: var(--canvas-w);
+      min-height: var(--workspace-h);
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    body {
+      color: #fff;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    .speed-overlay {
+      position: relative;
+      width: 100%;
+      height: var(--canvas-h);
+      background: #000 url("bg/自然风光_马蹄寺自然风景区_1_全景.jpg") center / cover no-repeat;
+      pointer-events: none;
+    }
+
+    .speed-overlay::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: rgba(0, 0, 0, .3);
+      -webkit-backdrop-filter: blur(2px);
+      backdrop-filter: blur(2px);
+    }
+
+    .speed-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      z-index: 1;
+    }
+
+    .line-segment {
+      position: absolute;
+      top: 0;
+      border-top: 2px dashed rgba(255, 255, 255, .9);
+    }
+
+    .speed-line.is-master .line-segment {
+      border-top: 4px solid rgba(255, 255, 255, .98);
+    }
+
+    .speed-label {
+      position: absolute;
+      top: 0;
+      width: 50px;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 44px;
+      font-weight: 400;
+      line-height: 1;
+      text-align: center;
+      text-shadow: 0 2px 3px rgba(0, 0, 0, .92);
+    }
+
+    .speed-line:not(.is-master) .speed-label {
+      width: 50px;
+      font-size: 40px;
+      text-shadow: 0 2px 3px rgba(0, 0, 0, .92);
+    }
+
+    .speed-line[data-speed="90"] .speed-label {
+      top: 10px;
+      transform: translate(-50%, 0);
+    }
+
+    .export-button {
+      position: fixed;
+      right: 28px;
+      bottom: 28px;
+      z-index: 10;
+      padding: 12px 18px;
+      border: 1px solid rgba(255, 255, 255, .55);
+      border-radius: 10px;
+      color: #fff;
+      background: rgba(16, 19, 27, .82);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+      font: 600 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      cursor: pointer;
+    }
+
+    .export-button:hover { background: rgba(43, 49, 64, .92); }
+    .export-button:disabled { cursor: wait; opacity: .65; }
+
+    .background-picker {
+      position: fixed;
+      right: 28px;
+      bottom: 144px;
+      z-index: 10;
+      display: inline-flex;
+      align-items: center;
+      min-height: 42px;
+      padding: 12px 18px;
+      border: 1px solid rgba(255, 255, 255, .55);
+      border-radius: 10px;
+      color: #fff;
+      background: rgba(16, 19, 27, .82);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+      font: 600 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      cursor: pointer;
+    }
+
+    .background-picker:hover { background: rgba(43, 49, 64, .92); }
+    .background-picker input { display: none; }
+
+    .current-export-button {
+      position: fixed;
+      right: 28px;
+      bottom: 86px;
+      z-index: 10;
+      padding: 12px 18px;
+      border: 1px solid rgba(255, 255, 255, .55);
+      border-radius: 10px;
+      color: #fff;
+      background: rgba(16, 19, 27, .82);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+      font: 600 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      cursor: pointer;
+    }
+
+    .current-export-button:hover { background: rgba(43, 49, 64, .92); }
+    .current-export-button:disabled { cursor: wait; opacity: .65; }
+
+    .background-gallery {
+      position: relative;
+      display: none;
+      height: 138px;
+      margin: 18px 290px 18px 28px;
+      padding: 12px 54px;
+      border: 1px solid rgba(255, 255, 255, .22);
+      border-radius: 12px;
+      background: rgba(11, 14, 21, .96);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, .26);
+    }
+
+    .background-gallery.is-visible { display: block; }
+
+    .thumbnail-scroller {
+      display: flex;
+      height: 100%;
+      gap: 12px;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, .35) transparent;
+    }
+
+    .background-thumb {
+      position: relative;
+      flex: 0 0 150px;
+      height: 104px;
+      padding: 0;
+      overflow: hidden;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      background: #141923;
+      cursor: pointer;
+    }
+
+    .background-thumb:hover { border-color: rgba(255, 255, 255, .65); }
+    .background-thumb.is-active { border-color: #fff; box-shadow: 0 0 0 2px rgba(65, 157, 255, .72); }
+    .background-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .background-thumb span {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      padding: 5px 7px;
+      overflow: hidden;
+      color: #fff;
+      background: linear-gradient(transparent, rgba(0, 0, 0, .8));
+      font-size: 12px;
+      text-align: left;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .gallery-nav {
+      position: absolute;
+      top: 50%;
+      z-index: 1;
+      width: 34px;
+      height: 52px;
+      transform: translateY(-50%);
+      border: 1px solid rgba(255, 255, 255, .36);
+      border-radius: 8px;
+      color: #fff;
+      background: rgba(28, 34, 46, .92);
+      font-size: 30px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .gallery-nav:hover { background: rgba(55, 65, 84, .98); }
+    .gallery-nav.prev { left: 10px; }
+    .gallery-nav.next { right: 10px; }
+
+    .calibration-panel {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      z-index: 11;
+      width: 330px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, .28);
+      border-radius: 12px;
+      color: #fff;
+      background: rgba(16, 19, 27, .88);
+      font: 14px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    .calibration-panel strong { display: block; margin-bottom: 10px; font-size: 15px; }
+    .calibration-row { display: grid; grid-template-columns: 95px 1fr 62px; gap: 8px; align-items: center; margin: 10px 0; }
+    .calibration-row input { width: 100%; }
+    .calibration-model { display: grid; grid-template-columns: 95px 1fr; gap: 8px; align-items: center; margin: 10px 0; }
+    .calibration-model select {
+      width: 100%;
+      height: 30px;
+      padding: 2px 7px;
+      border: 1px solid rgba(255, 255, 255, .28);
+      border-radius: 5px;
+      color: #fff;
+      background: rgba(255, 255, 255, .08);
+      font: inherit;
+    }
+    .calibration-model select option { color: #111; background: #fff; }
+    .calibration-number {
+      height: 28px;
+      padding: 2px 5px;
+      border: 1px solid rgba(255, 255, 255, .28);
+      border-radius: 5px;
+      color: #fff;
+      background: rgba(255, 255, 255, .08);
+      text-align: right;
+      font: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+    .calibration-help { margin: 8px 0 0; color: #B9C1CE; font-size: 12px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <main id="speed-overlay" class="speed-overlay" aria-label="速度刻度背景"></main>
+  <aside class="calibration-panel" aria-label="导出校准">
+    <strong id="calibration-title">机械师二代专用导出校准</strong>
+    <label class="calibration-model">
+      <span>车型预设</span>
+      <select id="model-select" aria-label="选择车型预设">
+        <option value="mechanic-2" data-config="机械师二代专用配置.json">机械师二代</option>
+      </select>
+    </label>
+    <label class="calibration-row">
+      <span>80 线位置</span>
+      <input id="top-line" type="range" min="-15" max="20" step="0.01" value="8.90">
+      <input id="top-line-number" class="calibration-number" type="number" min="-15" max="20" step="0.01" value="8.90" aria-label="80线位置百分比">
+    </label>
+    <label class="calibration-row">
+      <span>相邻线间距</span>
+      <input id="line-step" type="range" min="10" max="35" step="0.01" value="22.31">
+      <input id="line-step-number" class="calibration-number" type="number" min="10" max="35" step="0.01" value="22.31" aria-label="相邻线间距百分比">
+    </label>
+    <p class="calibration-help">调节后直接点击导出；该面板不会出现在 PNG 中。</p>
+  </aside>
+  <section id="background-gallery" class="background-gallery" aria-label="背景图缩略图">
+    <button id="gallery-prev" class="gallery-nav prev" type="button" aria-label="上一张背景图">‹</button>
+    <div id="background-thumbnails" class="thumbnail-scroller"></div>
+    <button id="gallery-next" class="gallery-nav next" type="button" aria-label="下一张背景图">›</button>
+  </section>
+  <label class="background-picker">
+    <input id="background-picker" type="file" accept="image/*" webkitdirectory directory multiple aria-label="选择背景文件夹">
+    选择背景文件夹
+  </label>
+  <button id="current-export-button" class="current-export-button" type="button">导出当前图片</button>
+  <button id="export-button" class="export-button" type="button">一键导出</button>
+
+  <script>
+    (() => {
+      const overlay = document.getElementById('speed-overlay');
+      const exportButton = document.getElementById('export-button');
+      const currentExportButton = document.getElementById('current-export-button');
+      const backgroundPicker = document.getElementById('background-picker');
+      const backgroundGallery = document.getElementById('background-gallery');
+      const backgroundThumbnails = document.getElementById('background-thumbnails');
+      const galleryPrev = document.getElementById('gallery-prev');
+      const galleryNext = document.getElementById('gallery-next');
+      const topLineInput = document.getElementById('top-line');
+      const lineStepInput = document.getElementById('line-step');
+      const topLineNumber = document.getElementById('top-line-number');
+      const lineStepNumber = document.getElementById('line-step-number');
+      const calibrationTitle = document.getElementById('calibration-title');
+      const modelSelect = document.getElementById('model-select');
+      const DEFAULT_MODEL_CONFIG = Object.freeze({
+        id: 'mechanic-2',
+        name: '机械师二代专用',
+        canvasWidth: 2073,
+        canvasHeight: 805,
+        top80Percent: 8.90,
+        step20Percent: 22.31,
+        labelCount: 10,
+        labelLeftPercent: 2.5,
+        labelRightPercent: 97.5,
+        filenamePrefix: '机械师二代',
+      });
+      let activeModelConfig = DEFAULT_MODEL_CONFIG;
+      const CANVAS_W = DEFAULT_MODEL_CONFIG.canvasWidth;
+      const CANVAS_H = DEFAULT_MODEL_CONFIG.canvasHeight;
+      let top80 = DEFAULT_MODEL_CONFIG.top80Percent;
+      let step20 = DEFAULT_MODEL_CONFIG.step20Percent;
+      const labelCount = DEFAULT_MODEL_CONFIG.labelCount;
+      const labelLeft = DEFAULT_MODEL_CONFIG.labelLeftPercent;
+      const labelRight = DEFAULT_MODEL_CONFIG.labelRightPercent;
+      const labelGapWidth = 50; // 页面预览：每个数值左右各预留 25px
+      const exportLabelGapWidth = 60; // PNG 导出：数值区域总宽度 60px
+      let background = new Image();
+      let backgroundItems = [];
+      let selectedBackgroundIndex = -1;
+      background.src = 'bg/自然风光_马蹄寺自然风景区_1_全景.jpg';
+
+      const disposeFolderImages = () => {
+        backgroundItems.forEach(item => URL.revokeObjectURL(item.url));
+        backgroundItems = [];
+        selectedBackgroundIndex = -1;
+        backgroundThumbnails.replaceChildren();
+        backgroundGallery.classList.remove('is-visible');
+      };
+
+      const highlightSelectedThumbnail = () => {
+        [...backgroundThumbnails.children].forEach((thumbnail, index) => {
+          const isActive = index === selectedBackgroundIndex;
+          thumbnail.classList.toggle('is-active', isActive);
+          thumbnail.setAttribute('aria-pressed', String(isActive));
+          if (isActive) thumbnail.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+        });
+      };
+
+      const selectBackground = (index) => {
+        if (!backgroundItems.length || index < 0 || index >= backgroundItems.length) return;
+        selectedBackgroundIndex = index;
+        const item = backgroundItems[index];
+        const selectedImage = new Image();
+        selectedImage.addEventListener('load', () => {
+          if (backgroundItems[index] !== item || selectedBackgroundIndex !== index) return;
+          background = selectedImage;
+          overlay.style.backgroundImage = `url("${item.url}")`;
+          highlightSelectedThumbnail();
+        }, { once: true });
+        selectedImage.addEventListener('error', () => alert(`无法加载图片：${item.name}`), { once: true });
+        selectedImage.src = item.url;
+      };
+
+      const renderBackgroundThumbnails = () => {
+        backgroundThumbnails.replaceChildren();
+        backgroundItems.forEach((item, index) => {
+          const thumbnail = document.createElement('button');
+          thumbnail.type = 'button';
+          thumbnail.className = 'background-thumb';
+          thumbnail.title = item.name;
+          thumbnail.setAttribute('aria-label', `切换到背景图：${item.name}`);
+          thumbnail.setAttribute('aria-pressed', 'false');
+          const image = document.createElement('img');
+          image.src = item.url;
+          image.alt = '';
+          const caption = document.createElement('span');
+          caption.textContent = item.name;
+          thumbnail.append(image, caption);
+          thumbnail.addEventListener('click', () => selectBackground(index));
+          backgroundThumbnails.appendChild(thumbnail);
+        });
+        backgroundGallery.classList.add('is-visible');
+      };
+
+      backgroundPicker.addEventListener('change', () => {
+        const files = [...backgroundPicker.files]
+          .filter(file => file.type.startsWith('image/'))
+          .sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name, 'zh-CN', { numeric: true, sensitivity: 'base' }));
+        backgroundPicker.value = '';
+        if (!files.length) {
+          alert('该文件夹中没有可用图片，请选择包含图片的文件夹');
+          return;
+        }
+
+        disposeFolderImages();
+        backgroundItems = files.map(file => ({
+          name: file.name,
+          url: URL.createObjectURL(file),
+        }));
+        renderBackgroundThumbnails();
+        selectBackground(0);
+      });
+
+      const stepBackground = (step) => {
+        if (!backgroundItems.length) return;
+        const nextIndex = (selectedBackgroundIndex + step + backgroundItems.length) % backgroundItems.length;
+        selectBackground(nextIndex);
+      };
+      galleryPrev.addEventListener('click', () => stepBackground(-1));
+      galleryNext.addEventListener('click', () => stepBackground(1));
+
+      // 5–85 每 5 km/h 一根线；90 不显示。
+      const yForSpeed = (speed) => {
+        if (speed > 80) return top80 * (90 - speed) / 10;
+        return top80 + ((80 - speed) / 20) * step20;
+      };
+
+      const lines = [];
+      const labelX = index => CANVAS_W * (labelLeft + (labelRight - labelLeft) * index / (labelCount - 1)) / 100;
+      const lineSegments = (gapWidth = labelGapWidth) => {
+        const segments = [];
+        let start = CANVAS_W * .021;
+        for (let index = 0; index < labelCount; index += 1) {
+          const gapStart = labelX(index) - gapWidth / 2;
+          if (gapStart > start) segments.push([start, gapStart]);
+          start = labelX(index) + gapWidth / 2;
+        }
+        const end = CANVAS_W * .979;
+        if (end > start) segments.push([start, end]);
+        return segments;
+      };
+      for (let speed = 5; speed <= 85; speed += 5) {
+        const line = document.createElement('div');
+        const isMaster = speed % 20 === 0;
+        line.className = `speed-line${isMaster ? ' is-master' : ''}`;
+        line.dataset.speed = speed;
+        lineSegments(exportLabelGapWidth).forEach(([start, end]) => {
+          const segment = document.createElement('i');
+          segment.className = 'line-segment';
+          segment.style.left = `${start}px`;
+          segment.style.width = `${end - start}px`;
+          line.appendChild(segment);
+        });
+        for (let index = 0; index < labelCount; index += 1) {
+          const label = document.createElement('div');
+          label.className = 'speed-label';
+          const x = labelLeft + (labelRight - labelLeft) * index / (labelCount - 1);
+          label.style.left = `${x}%`;
+          label.textContent = speed;
+          line.appendChild(label);
+        }
+
+        overlay.appendChild(line);
+        lines.push(line);
+      }
+
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+      const updateCalibration = (source = 'range') => {
+        if (source === 'number') {
+          const typedTop = Number(topLineNumber.value);
+          const typedStep = Number(lineStepNumber.value);
+          if (Number.isFinite(typedTop)) topLineInput.value = clamp(typedTop, -15, 20);
+          if (Number.isFinite(typedStep)) lineStepInput.value = clamp(typedStep, 10, 35);
+        }
+        top80 = Number(topLineInput.value);
+        step20 = Number(lineStepInput.value);
+        topLineNumber.value = top80.toFixed(2);
+        lineStepNumber.value = step20.toFixed(2);
+        lines.forEach(line => { line.style.top = `${yForSpeed(Number(line.dataset.speed))}%`; });
+      };
+
+      const normalizeModelConfig = raw => ({
+        id: raw.id || DEFAULT_MODEL_CONFIG.id,
+        name: raw.name || DEFAULT_MODEL_CONFIG.name,
+        top80Percent: Number(raw.speedScale?.top80Percent ?? DEFAULT_MODEL_CONFIG.top80Percent),
+        step20Percent: Number(raw.speedScale?.step20Percent ?? DEFAULT_MODEL_CONFIG.step20Percent),
+        filenamePrefix: raw.export?.filenamePrefix || DEFAULT_MODEL_CONFIG.filenamePrefix,
+      });
+
+      const applyModelConfig = config => {
+        activeModelConfig = config;
+        calibrationTitle.textContent = `${config.name}导出校准`;
+        topLineInput.value = config.top80Percent;
+        lineStepInput.value = config.step20Percent;
+        updateCalibration();
+      };
+
+      const loadModelConfig = async configPath => {
+        const response = await fetch(configPath, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`无法加载配置（${response.status}）`);
+        return normalizeModelConfig(await response.json());
+      };
+
+      const selectModel = async () => {
+        const option = modelSelect.selectedOptions[0];
+        try {
+          applyModelConfig(await loadModelConfig(option.dataset.config));
+        } catch (error) {
+          modelSelect.value = activeModelConfig.id;
+          alert(`车型配置加载失败：${error.message}`);
+        }
+      };
+
+      const loadModelCatalog = async () => {
+        try {
+          const response = await fetch('车型配置列表.json', { cache: 'no-store' });
+          if (!response.ok) throw new Error(`无法加载车型列表（${response.status}）`);
+          const catalog = await response.json();
+          if (!Array.isArray(catalog.models) || !catalog.models.length) return;
+          modelSelect.replaceChildren(...catalog.models.map(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            option.dataset.config = model.config;
+            return option;
+          }));
+          modelSelect.value = DEFAULT_MODEL_CONFIG.id;
+          await selectModel();
+        } catch (error) {
+          console.warn('车型配置列表加载失败，继续使用内置机械师二代预设。', error);
+        }
+      };
+
+      topLineInput.addEventListener('input', updateCalibration);
+      lineStepInput.addEventListener('input', updateCalibration);
+      topLineNumber.addEventListener('change', () => updateCalibration('number'));
+      lineStepNumber.addEventListener('change', () => updateCalibration('number'));
+      updateCalibration();
+      modelSelect.addEventListener('change', selectModel);
+      loadModelCatalog();
+
+      const drawBackgroundCover = (ctx, image) => {
+        const scale = Math.max(CANVAS_W / image.naturalWidth, CANVAS_H / image.naturalHeight);
+        const sourceW = CANVAS_W / scale;
+        const sourceH = CANVAS_H / scale;
+        const sourceX = (image.naturalWidth - sourceW) / 2;
+        const sourceY = (image.naturalHeight - sourceH) / 2;
+        ctx.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, CANVAS_W, CANVAS_H);
+      };
+
+      const drawFrostedBackground = (ctx, image) => {
+        const backgroundCanvas = document.createElement('canvas');
+        backgroundCanvas.width = CANVAS_W;
+        backgroundCanvas.height = CANVAS_H;
+        const backgroundCtx = backgroundCanvas.getContext('2d');
+        drawBackgroundCover(backgroundCtx, image);
+
+        ctx.save();
+        ctx.filter = 'blur(3px)';
+        ctx.drawImage(backgroundCanvas, 0, 0);
+        ctx.restore();
+      };
+
+      const drawBackgroundShade = (ctx) => {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, .28)';
+        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.restore();
+      };
+
+      const drawLine = (ctx, speed) => {
+        const y = CANVAS_H * yForSpeed(speed) / 100;
+        const isMaster = speed % 20 === 0;
+        ctx.save();
+        ctx.strokeStyle = isMaster ? 'rgba(255,255,255,.98)' : 'rgba(255,255,255,.9)';
+        ctx.lineWidth = isMaster ? 4 : 2;
+        ctx.setLineDash(isMaster ? [] : [5, 8]);
+        lineSegments().forEach(([start, end]) => {
+          ctx.beginPath();
+          ctx.moveTo(start, y);
+          ctx.lineTo(end, y);
+          ctx.stroke();
+        });
+        ctx.restore();
+      };
+
+      const drawLabel = (ctx, speed) => {
+        const y = CANVAS_H * yForSpeed(speed) / 100;
+        const fontSize = 40;
+        const labelY = speed === 90 ? 14 : Math.max(fontSize / 2 + 3, Math.min(CANVAS_H - fontSize / 2 - 3, y));
+        const isMaster = speed % 20 === 0;
+        ctx.save();
+        ctx.font = `400 ${fontSize}px -apple-system, BlinkMacSystemFont, PingFang SC, Microsoft YaHei, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const text = String(speed);
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = 'rgba(0,0,0,.92)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetY = 2;
+        for (let index = 0; index < labelCount; index += 1) {
+          const x = CANVAS_W * (labelLeft + (labelRight - labelLeft) * index / (labelCount - 1)) / 100;
+          ctx.fillText(text, x, labelY);
+        }
+        ctx.restore();
+      };
+
+      const loadBackgroundImage = (item) => new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener('load', () => resolve(image), { once: true });
+        image.addEventListener('error', () => reject(new Error(`背景图加载失败：${item.name}`)), { once: true });
+        image.src = item.url;
+      });
+
+      const downloadBackground = async (image, filename) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = CANVAS_W;
+        canvas.height = CANVAS_H;
+        const ctx = canvas.getContext('2d');
+        drawFrostedBackground(ctx, image);
+        drawBackgroundShade(ctx);
+        for (let speed = 5; speed <= 85; speed += 5) drawLine(ctx, speed);
+        for (let speed = 5; speed <= 85; speed += 5) drawLabel(ctx, speed);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .95));
+        if (!blob) throw new Error('JPG 编码失败');
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+
+      const getDisplayedBackground = async () => {
+        if (background.complete && background.naturalWidth) return background;
+        await new Promise((resolve, reject) => {
+          background.addEventListener('load', resolve, { once: true });
+          background.addEventListener('error', () => reject(new Error('当前背景图加载失败')), { once: true });
+        });
+        return background;
+      };
+
+      const exportCurrentBackground = async () => {
+        currentExportButton.disabled = true;
+        currentExportButton.textContent = '正在导出…';
+        try {
+          if (location.protocol === 'file:') {
+            throw new Error('请双击“启动一键导出.command”打开页面，再点击导出按钮');
+          }
+          const image = await getDisplayedBackground();
+          const number = selectedBackgroundIndex >= 0 ? selectedBackgroundIndex + 1 : 1;
+          await downloadBackground(image, `${activeModelConfig.filenamePrefix}_${number}.jpg`);
+          currentExportButton.textContent = '已导出';
+        } catch (error) {
+          alert(`导出失败：${error.message}`);
+        } finally {
+          currentExportButton.disabled = false;
+          setTimeout(() => { currentExportButton.textContent = '导出当前图片'; }, 1200);
+        }
+      };
+
+      const exportPng = async () => {
+        exportButton.disabled = true;
+        try {
+          if (location.protocol === 'file:') {
+            throw new Error('请双击“启动一键导出.command”打开页面，再点击导出按钮');
+          }
+          if (!backgroundItems.length) {
+            throw new Error('请先选择包含背景图片的文件夹');
+          }
+
+          for (let index = 0; index < backgroundItems.length; index += 1) {
+            exportButton.textContent = `正在导出 ${index + 1}/${backgroundItems.length}`;
+            const image = await loadBackgroundImage(backgroundItems[index]);
+            const number = index + 1;
+            await downloadBackground(image, `${activeModelConfig.filenamePrefix}_${number}.jpg`);
+            await new Promise(resolve => setTimeout(resolve, 160));
+          }
+          exportButton.textContent = `已导出 ${backgroundItems.length} 张`;
+        } catch (error) {
+          alert(`导出失败：${error.message}`);
+        } finally {
+          exportButton.disabled = false;
+          setTimeout(() => { exportButton.textContent = '一键导出'; }, 1200);
+        }
+      };
+
+      exportButton.addEventListener('click', exportPng);
+      currentExportButton.addEventListener('click', exportCurrentBackground);
+    })();
+  </script>
+</body>
+</html>
