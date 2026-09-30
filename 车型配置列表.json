@@ -4,6 +4,11 @@
       "id": "mechanic-2",
       "name": "机械师二代",
       "config": "机械师二代专用配置.json"
+    },
+    {
+      "id": "mz330",
+      "name": "MZ330",
+      "config": "MZ330专用配置.json"
     }
   ]
 }

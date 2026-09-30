@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>机械师二代专用速度背景</title>
+  <title>九号车型速度背景导出</title>
   <style>
     /*
-      导出画布：2073 × 805（比例约 2.575:1）。
-      此比例匹配机械师二代 APP 的速度曲线可用绘图区，避免导入后被二次裁切。
+      默认导出画布：2073 × 805（机械师二代）。
+      切换至 MZ330 时自动使用 2521 × 1187，避免导入后上下露出黑色底。
       80 / 60 / 40 / 20 km/h 分别固定在 0% / 25% / 50% / 75% H。
     */
     :root {
@@ -327,8 +327,8 @@
         filenamePrefix: '机械师二代',
       });
       let activeModelConfig = DEFAULT_MODEL_CONFIG;
-      const CANVAS_W = DEFAULT_MODEL_CONFIG.canvasWidth;
-      const CANVAS_H = DEFAULT_MODEL_CONFIG.canvasHeight;
+      let CANVAS_W = DEFAULT_MODEL_CONFIG.canvasWidth;
+      let CANVAS_H = DEFAULT_MODEL_CONFIG.canvasHeight;
       let top80 = DEFAULT_MODEL_CONFIG.top80Percent;
       let step20 = DEFAULT_MODEL_CONFIG.step20Percent;
       const labelCount = DEFAULT_MODEL_CONFIG.labelCount;
@@ -427,7 +427,7 @@
         return top80 + ((80 - speed) / 20) * step20;
       };
 
-      const lines = [];
+      let lines = [];
       const labelX = index => CANVAS_W * (labelLeft + (labelRight - labelLeft) * index / (labelCount - 1)) / 100;
       const lineSegments = (gapWidth = labelGapWidth) => {
         const segments = [];
@@ -441,7 +441,10 @@
         if (end > start) segments.push([start, end]);
         return segments;
       };
-      for (let speed = 5; speed <= 85; speed += 5) {
+      const renderSpeedLines = () => {
+        overlay.replaceChildren();
+        lines = [];
+        for (let speed = 5; speed <= 85; speed += 5) {
         const line = document.createElement('div');
         const isMaster = speed % 20 === 0;
         line.className = `speed-line${isMaster ? ' is-master' : ''}`;
@@ -462,9 +465,11 @@
           line.appendChild(label);
         }
 
-        overlay.appendChild(line);
-        lines.push(line);
-      }
+          overlay.appendChild(line);
+          lines.push(line);
+        }
+      };
+      renderSpeedLines();
 
       const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
       const updateCalibration = (source = 'range') => {
@@ -484,6 +489,8 @@
       const normalizeModelConfig = raw => ({
         id: raw.id || DEFAULT_MODEL_CONFIG.id,
         name: raw.name || DEFAULT_MODEL_CONFIG.name,
+        canvasWidth: Number(raw.canvas?.width ?? DEFAULT_MODEL_CONFIG.canvasWidth),
+        canvasHeight: Number(raw.canvas?.height ?? DEFAULT_MODEL_CONFIG.canvasHeight),
         top80Percent: Number(raw.speedScale?.top80Percent ?? DEFAULT_MODEL_CONFIG.top80Percent),
         step20Percent: Number(raw.speedScale?.step20Percent ?? DEFAULT_MODEL_CONFIG.step20Percent),
         filenamePrefix: raw.export?.filenamePrefix || DEFAULT_MODEL_CONFIG.filenamePrefix,
@@ -491,9 +498,15 @@
 
       const applyModelConfig = config => {
         activeModelConfig = config;
+        CANVAS_W = config.canvasWidth;
+        CANVAS_H = config.canvasHeight;
+        document.documentElement.style.setProperty('--canvas-w', `${CANVAS_W}px`);
+        document.documentElement.style.setProperty('--canvas-h', `${CANVAS_H}px`);
+        document.documentElement.style.setProperty('--workspace-h', `${CANVAS_H + 170}px`);
         calibrationTitle.textContent = `${config.name}导出校准`;
         topLineInput.value = config.top80Percent;
         lineStepInput.value = config.step20Percent;
+        renderSpeedLines();
         updateCalibration();
       };
 
